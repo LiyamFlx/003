@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="EngageSense Application with Real-Time Engagement Analysis">
+    <title>EngageSense</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tensorflow/tf.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a1a;
+            color: #f5f5f5;
+        }
+        header {
+            text-align: center;
+            background-color: #333;
+            padding: 20px;
+        }
+        main {
+            padding: 20px;
+        }
+        canvas {
+            max-width: 600px;
+            margin: 20px auto;
+            display: block;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .controls button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            background-color: #555;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .controls button:hover {
+            background-color: #888;
+        }
+        footer {
+            text-align: center;
+            background-color: #222;
+            padding: 10px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>EngageSense</h1>
+        <p>Real-Time Engagement Analysis</p>
+    </header>
+    <main>
+        <h2>Live Analysis</h2>
+        <canvas id="engagementChart"></canvas>
+        <div class="controls">
+            <button id="startBtn">Start Recording</button>
+            <button id="stopBtn" disabled>Stop Recording</button>
+            <button id="exportBtn">Export Data</button>
+        </div>
+        <p id="engagementResult"></p>
+    </main>
+    <footer>
+        <p>&copy; 2024 EngageSense. All rights reserved.</p>
+    </footer>
+
+    <script>
+        const engagementMetrics = {
+            Physical: 0,
+            Emotional: 0,
+            Mental: 0,
+            Spiritual: 0
+        };
+
+        const ctx = document.getElementById('engagementChart').getContext('2d');
+        const engagementChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Physical', 'Emotional', 'Mental', 'Spiritual'],
+                datasets: [{
+                    label: 'Engagement Level',
+                    data: [0, 0, 0, 0],
+                    backgroundColor: ['#FF5733', '#33FF57', '#3357FF', '#FFFF33']
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        let mediaRecorder, audioChunks = [];
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const engagementResult = document.getElementById('engagementResult');
+
+        async function initRecording() {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+                if (mediaRecorder.state === 'inactive') {
+                    analyzeAudio(new Blob(audioChunks));
+                }
+            };
+
+            mediaRecorder.start();
+        }
+
+        function analyzeAudio(blob) {
+            const reader = new FileReader();
+            reader.onload = async () => {
+                const audioBuffer = await decodeAudioData(reader.result);
+                const features = extractFeatures(audioBuffer);
+                const model = await tf.loadLayersModel('path/to/model.json'); // Placeholder
+                const prediction = model.predict(tf.tensor([features])).arraySync();
+                updateMetrics(prediction);
+            };
+            reader.readAsArrayBuffer(blob);
+        }
+
+        function updateMetrics(prediction) {
+            engagementMetrics.Physical = prediction[0];
+            engagementMetrics.Emotional = prediction[1];
+            engagementMetrics.Mental = prediction[2];
+            engagementMetrics.Spiritual = prediction[3];
+
+            engagementChart.data.datasets[0].data = [
+                engagementMetrics.Physical,
+                engagementMetrics.Emotional,
+                engagementMetrics.Mental,
+                engagementMetrics.Spiritual
+            ];
+            engagementChart.update();
+
+            engagementResult.textContent = `Engagement Levels: Physical: ${engagementMetrics.Physical.toFixed(2)}, Emotional: ${engagementMetrics.Emotional.toFixed(2)}, Mental: ${engagementMetrics.Mental.toFixed(2)}, Spiritual: ${engagementMetrics.Spiritual.toFixed(2)}`;
+        }
+
+        startBtn.addEventListener('click', () => {
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            initRecording();
+        });
+
+        stopBtn.addEventListener('click', () => {
+            stopBtn.disabled = true;
+            startBtn.disabled = false;
+            mediaRecorder.stop();
+        });
+
+        exportBtn.addEventListener('click', () => {
+            const csvContent = `data:text/csv;charset=utf-8,Category,Level\nPhysical,${engagementMetrics.Physical}\nEmotional,${engagementMetrics.Emotional}\nMental,${engagementMetrics.Mental}\nSpiritual,${engagementMetrics.Spiritual}`;
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement('a');
+            link.setAttribute('href', encodedUri);
+            link.setAttribute('download', 'engagement_data.csv');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+    </script>
+</body>
+</html>
