@@ -6,7 +6,7 @@
     <meta name="description" content="EngageSense Application with Real-Time Engagement Analysis">
     <title>EngageSense</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tensorflow/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -121,12 +121,14 @@
             mediaRecorder.start();
         }
 
-        function analyzeAudio(blob) {
+        async function analyzeAudio(blob) {
             const reader = new FileReader();
             reader.onload = async () => {
                 const audioBuffer = await decodeAudioData(reader.result);
                 const features = extractFeatures(audioBuffer);
-                const model = await tf.loadLayersModel('path/to/model.json'); // Placeholder
+
+                // Load the TensorFlow.js model
+                const model = await tf.loadLayersModel('./model/model.json');
                 const prediction = model.predict(tf.tensor([features])).arraySync();
                 updateMetrics(prediction);
             };
