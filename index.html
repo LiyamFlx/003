@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="EngageSense Application with Real-Time Engagement Analysis">
+    <meta name="description" content="EngageSense: Real-time audience engagement analysis">
     <title>EngageSense</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        /* General Styles */
         body {
             font-family: Arial, sans-serif;
             margin: 0;
@@ -15,165 +16,206 @@
             background-color: #1a1a1a;
             color: #f5f5f5;
         }
+
         header {
-            text-align: center;
-            background-color: #333;
+            background-color: #20232a;
             padding: 20px;
+            text-align: center;
         }
+
+        header h1 {
+            margin: 0;
+            font-size: 2rem;
+            color: #61dafb;
+        }
+
         main {
             padding: 20px;
         }
-        canvas {
-            max-width: 600px;
-            margin: 20px auto;
-            display: block;
+
+        .container {
+            max-width: 800px;
+            margin: auto;
         }
-        .controls {
-            text-align: center;
+
+        .chart-container {
             margin: 20px 0;
         }
-        .controls button {
+
+        footer {
+            background-color: #20232a;
+            padding: 10px;
+            text-align: center;
+            color: #f5f5f5;
+        }
+
+        button {
             padding: 10px 20px;
-            margin: 5px;
-            font-size: 16px;
-            background-color: #555;
-            color: white;
+            margin: 10px 5px;
+            background-color: #61dafb;
             border: none;
             border-radius: 5px;
+            color: black;
             cursor: pointer;
         }
-        .controls button:hover {
-            background-color: #888;
+
+        button:hover {
+            background-color: #21a1f1;
         }
-        footer {
-            text-align: center;
-            background-color: #222;
+
+        input[type="file"] {
+            margin: 20px 0;
             padding: 10px;
-            margin-top: 20px;
         }
     </style>
 </head>
 <body>
     <header>
         <h1>EngageSense</h1>
-        <p>Real-Time Engagement Analysis</p>
+        <p>Analyze real-time audience engagement with AI.</p>
     </header>
     <main>
-        <h2>Live Analysis</h2>
-        <canvas id="engagementChart"></canvas>
-        <div class="controls">
-            <button id="startBtn">Start Recording</button>
-            <button id="stopBtn" disabled>Stop Recording</button>
-            <button id="exportBtn">Export Data</button>
+        <div class="container">
+            <h2>Upload Audio for Analysis</h2>
+            <input type="file" id="audio-upload" accept=".mp3,.wav">
+            <button onclick="analyzeAudio()">Analyze Audio</button>
+            <button onclick="startRecording()">Start Recording</button>
+            <button onclick="stopRecording()">Stop Recording</button>
+
+            <h3>Engagement Levels</h3>
+            <div class="chart-container">
+                <canvas id="engagementChart"></canvas>
+            </div>
+            <h3>Feedback</h3>
+            <div id="feedback"></div>
         </div>
-        <p id="engagementResult"></p>
     </main>
     <footer>
         <p>&copy; 2024 EngageSense. All rights reserved.</p>
     </footer>
 
     <script>
-        const engagementMetrics = {
-            Physical: 0,
-            Emotional: 0,
-            Mental: 0,
-            Spiritual: 0
-        };
+        let audioContext;
+        let analyser;
+        let dataArray;
+        let mediaRecorder;
+        let recordedChunks = [];
+        let model;
 
-        const ctx = document.getElementById('engagementChart').getContext('2d');
-        const engagementChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: ['Physical', 'Emotional', 'Mental', 'Spiritual'],
-                datasets: [{
-                    label: 'Engagement Level',
-                    data: [0, 0, 0, 0],
-                    backgroundColor: ['#FF5733', '#33FF57', '#3357FF', '#FFFF33']
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true
+        // Load the TensorFlow.js model
+        async function loadModel() {
+            model = await tf.loadLayersModel('path/to/model.json'); // Replace with actual model path
+            console.log('Model loaded successfully!');
+        }
+
+        // Real-time Visualization
+        function visualizeAudio(stream) {
+            const canvas = document.getElementById('engagementChart');
+            const ctx = canvas.getContext('2d');
+            audioContext = new AudioContext();
+            analyser = audioContext.createAnalyser();
+
+            const source = audioContext.createMediaStreamSource(stream);
+            source.connect(analyser);
+            analyser.fftSize = 2048;
+
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+            function draw() {
+                analyser.getByteFrequencyData(dataArray);
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const barWidth = (canvas.width / dataArray.length) * 2.5;
+                let barHeight;
+                let x = 0;
+
+                for (let i = 0; i < dataArray.length; i++) {
+                    barHeight = dataArray[i];
+                    ctx.fillStyle = 'rgb(' + (barHeight + 100) + ',50,50)';
+                    ctx.fillRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
+                    x += barWidth + 1;
+                }
+
+                requestAnimationFrame(draw);
+            }
+
+            draw();
+        }
+
+        // Start Recording
+        function startRecording() {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.start();
+                    mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
+
+                    visualizeAudio(stream);
+                })
+                .catch(err => console.error('Error accessing microphone:', err));
+        }
+
+        // Stop Recording
+        function stopRecording() {
+            mediaRecorder.stop();
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'audio/wav' });
+                const fileReader = new FileReader();
+                fileReader.onload = () => {
+                    const audioBuffer = fileReader.result;
+                    analyzeAudio(audioBuffer);
+                };
+                fileReader.readAsArrayBuffer(blob);
+            };
+        }
+
+        // Analyze Audio
+        async function analyzeAudio(audioBuffer) {
+            if (!model) {
+                alert('Model not loaded. Please wait.');
+                return;
+            }
+
+            const tensor = tf.tensor(audioBuffer); // Preprocess the audioBuffer here
+            const predictions = model.predict(tensor).dataSync();
+
+            const feedback = document.getElementById('feedback');
+            feedback.innerHTML = `
+                Physical: ${predictions[0].toFixed(2)}%<br>
+                Emotional: ${predictions[1].toFixed(2)}%<br>
+                Mental: ${predictions[2].toFixed(2)}%<br>
+                Spiritual: ${predictions[3].toFixed(2)}%
+            `;
+
+            updateChart(predictions);
+        }
+
+        // Update Chart with Predictions
+        function updateChart(data) {
+            const ctx = document.getElementById('engagementChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Physical', 'Emotional', 'Mental', 'Spiritual'],
+                    datasets: [{
+                        label: 'Engagement Levels (%)',
+                        data,
+                        backgroundColor: ['#ff6384', '#36a2eb', '#cc65fe', '#ffce56'],
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: { beginAtZero: true }
                     }
                 }
-            }
-        });
-
-        let mediaRecorder, audioChunks = [];
-        const startBtn = document.getElementById('startBtn');
-        const stopBtn = document.getElementById('stopBtn');
-        const exportBtn = document.getElementById('exportBtn');
-        const engagementResult = document.getElementById('engagementResult');
-
-        async function initRecording() {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
-
-            mediaRecorder.ondataavailable = (event) => {
-                audioChunks.push(event.data);
-                if (mediaRecorder.state === 'inactive') {
-                    analyzeAudio(new Blob(audioChunks));
-                }
-            };
-
-            mediaRecorder.start();
+            });
         }
 
-        async function analyzeAudio(blob) {
-            const reader = new FileReader();
-            reader.onload = async () => {
-                const audioBuffer = await decodeAudioData(reader.result);
-                const features = extractFeatures(audioBuffer);
-
-                // Load the TensorFlow.js model
-                const model = await tf.loadLayersModel('./model/model.json');
-                const prediction = model.predict(tf.tensor([features])).arraySync();
-                updateMetrics(prediction);
-            };
-            reader.readAsArrayBuffer(blob);
-        }
-
-        function updateMetrics(prediction) {
-            engagementMetrics.Physical = prediction[0];
-            engagementMetrics.Emotional = prediction[1];
-            engagementMetrics.Mental = prediction[2];
-            engagementMetrics.Spiritual = prediction[3];
-
-            engagementChart.data.datasets[0].data = [
-                engagementMetrics.Physical,
-                engagementMetrics.Emotional,
-                engagementMetrics.Mental,
-                engagementMetrics.Spiritual
-            ];
-            engagementChart.update();
-
-            engagementResult.textContent = `Engagement Levels: Physical: ${engagementMetrics.Physical.toFixed(2)}, Emotional: ${engagementMetrics.Emotional.toFixed(2)}, Mental: ${engagementMetrics.Mental.toFixed(2)}, Spiritual: ${engagementMetrics.Spiritual.toFixed(2)}`;
-        }
-
-        startBtn.addEventListener('click', () => {
-            startBtn.disabled = true;
-            stopBtn.disabled = false;
-            initRecording();
-        });
-
-        stopBtn.addEventListener('click', () => {
-            stopBtn.disabled = true;
-            startBtn.disabled = false;
-            mediaRecorder.stop();
-        });
-
-        exportBtn.addEventListener('click', () => {
-            const csvContent = `data:text/csv;charset=utf-8,Category,Level\nPhysical,${engagementMetrics.Physical}\nEmotional,${engagementMetrics.Emotional}\nMental,${engagementMetrics.Mental}\nSpiritual,${engagementMetrics.Spiritual}`;
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement('a');
-            link.setAttribute('href', encodedUri);
-            link.setAttribute('download', 'engagement_data.csv');
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        });
+        // Load the ML model on startup
+        loadModel();
     </script>
 </body>
 </html>
